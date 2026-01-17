@@ -114,10 +114,14 @@ function clearConversation(senderId) {
   console.log(`🗑️  Cleared conversation for ${senderId}`);
 }
 
+// Export conversations map for dashboard access
+module.exports.conversations = conversations;
+
 module.exports = {
   processMessage,
   getConversation,
   clearConversation,
   reloadStyleProfile,
-  setUserProfile
+  setUserProfile,
+  conversations
 };

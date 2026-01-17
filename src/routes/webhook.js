@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { processMessage } = require('../services/messageProcessor');
 const { sendMessageWithSplit, sendTypingIndicator, getUserProfile } = require('../services/facebook');
+const { shouldBotRespond } = require('../services/botController');
 
 // Webhook verification
 router.get('/webhook', (req, res) => {
@@ -38,9 +39,22 @@ router.post('/webhook', async (req, res) => {
         console.log(`💬 Message from ${senderPsid}: "${messageText}"`);
 
         try {
-          // Get user profile (name, etc)
+          // Get user profile
           const userProfile = await getUserProfile(senderPsid);
           console.log(`👤 User: ${userProfile?.first_name || 'Unknown'}`);
+
+          // Check if bot should respond
+          if (!shouldBotRespond(senderPsid)) {
+            console.log(`⏸️  Bot not responding (disabled or manual mode)`);
+            // Still store the message in conversation history
+            const { getConversation } = require('../services/messageProcessor');
+            const conversation = getConversation(senderPsid);
+            conversation.push({
+              role: 'user',
+              content: messageText
+            });
+            return; // Don't send AI response
+          }
 
           // Show typing indicator
           await sendTypingIndicator(senderPsid, true);
@@ -48,7 +62,7 @@ router.post('/webhook', async (req, res) => {
           // Process the message with AI
           const aiResponse = await processMessage(senderPsid, messageText, userProfile);
 
-          // Send the response back to Facebook (with splitting if needed)
+          // Send the response
           await sendMessageWithSplit(senderPsid, aiResponse);
           console.log(`✅ Response sent to ${senderPsid}`);
 

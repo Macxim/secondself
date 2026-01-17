@@ -1,0 +1,75 @@
+const express = require('express');
+const router = express.Router();
+const { processMessage } = require('../services/messageProcessor');
+const { sendMessageWithSplit, sendTypingIndicator, getUserProfile } = require('../services/facebook');
+
+// Webhook verification
+router.get('/webhook', (req, res) => {
+  const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN;
+
+  let mode = req.query['hub.mode'];
+  let token = req.query['hub.verify_token'];
+  let challenge = req.query['hub.challenge'];
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('✅ WEBHOOK_VERIFIED');
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  }
+});
+
+// Webhook endpoint for receiving messages
+router.post('/webhook', async (req, res) => {
+  let body = req.body;
+
+  if (body.object === 'page') {
+
+    for (const entry of body.entry) {
+      let webhookEvent = entry.messaging[0];
+      console.log('📨 Received webhook event:', JSON.stringify(webhookEvent, null, 2));
+
+      let senderPsid = webhookEvent.sender.id;
+
+      if (webhookEvent.message && webhookEvent.message.text) {
+        const messageText = webhookEvent.message.text;
+        console.log(`💬 Message from ${senderPsid}: "${messageText}"`);
+
+        try {
+          // Get user profile (name, etc)
+          const userProfile = await getUserProfile(senderPsid);
+          console.log(`👤 User: ${userProfile?.first_name || 'Unknown'}`);
+
+          // Show typing indicator
+          await sendTypingIndicator(senderPsid, true);
+
+          // Process the message with AI
+          const aiResponse = await processMessage(senderPsid, messageText, userProfile);
+
+          // Send the response back to Facebook (with splitting if needed)
+          await sendMessageWithSplit(senderPsid, aiResponse);
+          console.log(`✅ Response sent to ${senderPsid}`);
+
+        } catch (error) {
+          console.error('❌ Error processing message:', error);
+          try {
+            await sendMessageWithSplit(senderPsid, "Sorry, I'm having trouble right now. Please try again later.");
+          } catch (sendError) {
+            console.error('❌ Error sending error message:', sendError);
+          }
+        } finally {
+          await sendTypingIndicator(senderPsid, false);
+        }
+      }
+    }
+
+    res.status(200).send('EVENT_RECEIVED');
+
+  } else {
+    res.sendStatus(404);
+  }
+});
+
+module.exports = router;

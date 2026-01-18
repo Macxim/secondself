@@ -1,0 +1,40 @@
+{
+  "34381422274781905": {
+    "senderId": "34381422274781905",
+    "firstName": "Maxime",
+    "entryType": "group_member",
+    "stage": "sent_link",
+    "metadata": {
+      "topic": "getting coaching clients"
+    },
+    "history": [
+      {
+        "stage": "waiting_initial_reply",
+        "timestamp": "2026-01-18T21:50:27.209Z",
+        "notes": "Sent initial DM"
+      },
+      {
+        "stage": "sent_doc",
+        "timestamp": "2026-01-18T21:50:45.034Z",
+        "notes": "User said: yes, please"
+      },
+      {
+        "stage": "waiting_doc_reply",
+        "timestamp": "2026-01-18T21:51:25.156Z",
+        "notes": "User said: GAMEPLAN"
+      },
+      {
+        "stage": "waiting_doc_reply",
+        "timestamp": "2026-01-18T21:52:58.515Z",
+        "notes": "User said: Thanks, how much is it?"
+      },
+      {
+        "stage": "sent_link",
+        "timestamp": "2026-01-18T21:53:28.084Z",
+        "notes": "User said: Sure"
+      }
+    ],
+    "createdAt": "2026-01-18T21:50:26.312Z",
+    "updatedAt": "2026-01-18T21:53:28.084Z"
+  }
+}

@@ -5,6 +5,7 @@ const webhookRoutes = require('./src/routes/webhook');
 const testRoutes = require('./src/routes/test');
 const styleRoutes = require('./src/routes/style');
 const dashboardRoutes = require('./src/routes/dashboard');
+const flowRoutes = require('./src/routes/flow');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,7 +17,7 @@ app.use(express.static('public')); // Serve static files
 // Routes
 app.get('/', (req, res) => {
   res.json({
-    message: 'Messenger AI Clone Server is running!',
+    message: 'Second Self Server is running!',
     status: 'ok',
     dashboard: '/dashboard.html',
     endpoints: {
@@ -38,6 +39,7 @@ app.use('/', webhookRoutes);
 app.use('/', testRoutes);
 app.use('/', styleRoutes);
 app.use('/', dashboardRoutes);
+app.use('/', flowRoutes);
 
 // Start server
 app.listen(PORT, () => {

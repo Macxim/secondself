@@ -3,6 +3,7 @@ const router = express.Router();
 const { processMessage } = require('../services/messageProcessor');
 const { sendMessageWithSplit, sendTypingIndicator, getUserProfile } = require('../services/facebook');
 const { shouldBotRespond } = require('../services/botController');
+const botConfig = require('../config/botConfig');
 
 // Webhook verification
 router.get('/webhook', (req, res) => {
@@ -61,6 +62,18 @@ router.post('/webhook', async (req, res) => {
 
           // Process the message with AI
           const aiResponse = await processMessage(senderPsid, messageText, userProfile);
+
+          // Calculate natural delay
+          const wordCount = aiResponse.split(' ').length;
+          const baseDelay = wordCount * botConfig.delays.msPerWord;
+          const randomVariation = Math.random() * botConfig.delays.randomVariation;
+          const delay = Math.min(
+            Math.max(baseDelay + randomVariation, botConfig.delays.minDelay),
+            botConfig.delays.maxDelay
+          );
+
+          console.log(`⏱️  Waiting ${Math.round(delay / 1000)}s before replying (${wordCount} words)...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
 
           // Send the response
           await sendMessageWithSplit(senderPsid, aiResponse);

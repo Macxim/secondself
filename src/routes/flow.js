@@ -6,12 +6,12 @@ const {
   updateStage,
   getInitialDM,
   getAllFlows,
+  executeFollowUps,
   STAGES,
   ENTRY_TYPES
 } = require('../services/salesFlow');
 const { sendMessageWithSplit } = require('../services/facebook');
 
-// Start a new flow for a user
 // Start a new flow for a user
 router.post('/flow/start', async (req, res) => {
   const { senderId, firstName, entryType, metadata } = req.body;
@@ -113,6 +113,22 @@ router.get('/flow/config', (req, res) => {
     stages: STAGES,
     entryTypes: ENTRY_TYPES
   });
+});
+
+// Trigger automated follow-ups
+router.post('/flow/process-followups', async (req, res) => {
+  try {
+    const processedCount = await executeFollowUps();
+    res.json({
+      success: true,
+      processedCount
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 module.exports = router;

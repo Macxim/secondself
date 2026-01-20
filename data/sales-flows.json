@@ -1,40 +1,31 @@
 {
-  "34381422274781905": {
-    "senderId": "34381422274781905",
-    "firstName": "Maxime",
-    "entryType": "group_member",
-    "stage": "sent_link",
+  "test_user_123": {
+    "senderId": "test_user_123",
+    "firstName": "John",
+    "entryType": "profile_engager",
+    "stage": "waiting_payment",
+    "followUpCount": 0,
     "metadata": {
-      "topic": "getting coaching clients"
+      "topic": "Facebook Marketing"
     },
     "history": [
       {
         "stage": "waiting_initial_reply",
-        "timestamp": "2026-01-18T21:50:27.209Z",
+        "timestamp": "2026-01-20T18:10:09.204Z",
         "notes": "Sent initial DM"
       },
       {
-        "stage": "sent_doc",
-        "timestamp": "2026-01-18T21:50:45.034Z",
-        "notes": "User said: yes, please"
-      },
-      {
         "stage": "waiting_doc_reply",
-        "timestamp": "2026-01-18T21:51:25.156Z",
-        "notes": "User said: GAMEPLAN"
+        "timestamp": "2026-01-20T18:10:09.211Z",
+        "notes": "User said yes"
       },
       {
-        "stage": "waiting_doc_reply",
-        "timestamp": "2026-01-18T21:52:58.515Z",
-        "notes": "User said: Thanks, how much is it?"
-      },
-      {
-        "stage": "sent_link",
-        "timestamp": "2026-01-18T21:53:28.084Z",
-        "notes": "User said: Sure"
+        "stage": "waiting_payment",
+        "timestamp": "2026-01-20T18:10:09.212Z",
+        "notes": "User said GAMEPLAN"
       }
     ],
-    "createdAt": "2026-01-18T21:50:26.312Z",
-    "updatedAt": "2026-01-18T21:53:28.084Z"
+    "createdAt": "2026-01-20T18:07:09.643Z",
+    "updatedAt": "2026-01-20T18:10:09.212Z"
   }
 }

@@ -12,9 +12,17 @@ const STAGES = {
   SENT_LINK: 'sent_link',
   WAITING_PAYMENT: 'waiting_payment',
   PAID: 'paid',
-  BOOKED: 'booked',
+  WAITING_BOOKING: 'waiting_booking',
+  WAITING_INTAKE: 'waiting_intake',
   COMPLETED: 'completed',
   CLOSED: 'closed'
+};
+
+const SCRIPTS = {
+  OFFER_DOC_LINK: '[OFFER DOC LINK]',
+  PAYMENT_LINK: '[PAYMENT LINK]',
+  BOOKING_LINK: '[BOOKING LINK]',
+  INTAKE_LINK: '[INTAKE LINK]'
 };
 
 // Entry types (A, B, C from your script)
@@ -70,6 +78,7 @@ async function initializeUser(senderId, entryType, firstName, metadata = {}) {
     firstName,
     entryType,
     stage: STAGES.INITIAL_DM,
+    followUpCount: 0,
     metadata: {
       topic: metadata.topic || 'getting clients',
       ...metadata
@@ -96,12 +105,15 @@ function getUserFlow(senderId) {
 /**
  * Update user's flow stage
  */
-async function updateStage(senderId, newStage, notes = '') {
+async function updateStage(senderId, newStage, notes = '', resetFollowUp = true) {
   const flow = userFlows.get(senderId);
   if (!flow) return null;
 
   flow.stage = newStage;
   flow.updatedAt = new Date().toISOString();
+  if (resetFollowUp) {
+    flow.followUpCount = 0;
+  }
   flow.history.push({
     stage: newStage,
     timestamp: new Date().toISOString(),
@@ -111,7 +123,7 @@ async function updateStage(senderId, newStage, notes = '') {
   userFlows.set(senderId, flow);
   await saveFlows();
 
-  console.log(`📊 ${flow.firstName} moved to: ${newStage}`);
+  console.log(`📊 ${flow.firstName} moved to: ${newStage} (Follow-up count: ${flow.followUpCount})`);
   return flow;
 }
 
@@ -162,52 +174,36 @@ function getNextMessage(senderId, userMessage) {
       if (isPositiveResponse(lowerMessage)) {
         console.log(`✅ Positive response detected! Sending doc...`);
         return {
-          message: `Perfect, here you go\n\n[OFFER DOC LINK]\n\nIf it looks like a fit, reply GAMEPLAN, and I'll send the link to grab a spot.`,
-          nextStage: STAGES.SENT_DOC
+          message: `Perfect, here you go\n\n${SCRIPTS.OFFER_DOC_LINK}\n\nIf it looks like a fit, reply GAMEPLAN, and I'll send the link to grab a spot.`,
+          nextStage: STAGES.WAITING_DOC_REPLY
         };
-      } else {
-        console.log(`❓ Not recognized as positive: "${lowerMessage}"`);
       }
       break;
 
-    case STAGES.SENT_DOC:
-      console.log(`🔍 In SENT_DOC stage, moving to WAITING_DOC_REPLY`);
-      // Auto-transition to waiting for doc reply
-      return {
-        message: null, // Don't send a message, just update stage
-        nextStage: STAGES.WAITING_DOC_REPLY,
-        silent: true
-      };
 
     case STAGES.WAITING_DOC_REPLY:
       console.log(`🔍 In WAITING_DOC_REPLY stage`);
       if (lowerMessage.includes('gameplan') || isPositiveResponse(lowerMessage)) {
         console.log(`✅ Ready for payment link!`);
         return {
-          message: `Awesome, here you go\nhttps://link.fastpaydirect.com/payment-link/67890327cd7a105351d622d1\nAfter you check out, book your 1:1 on the confirmation page.\nOnce it's done, let me know and I'll send your intake form + next steps.`,
-          nextStage: STAGES.SENT_LINK
+          message: `Awesome, here you go\n${SCRIPTS.PAYMENT_LINK}\nAfter you check out, book your 1:1 on the confirmation page.\nOnce it's done, let me know and I'll send your intake form + next steps.`,
+          nextStage: STAGES.WAITING_PAYMENT
         };
       }
       break;
 
-    case STAGES.SENT_LINK:
-      console.log(`🔍 In SENT_LINK stage, moving to WAITING_PAYMENT`);
-      return {
-        message: null,
-        nextStage: STAGES.WAITING_PAYMENT,
-        silent: true
-      };
 
     case STAGES.WAITING_PAYMENT:
       console.log(`🔍 In WAITING_PAYMENT stage`);
       if (lowerMessage.includes('paid') || lowerMessage.includes('done') || lowerMessage.includes('completed') || lowerMessage.includes('purchased')) {
         console.log(`✅ Payment confirmed!`);
         return {
-          message: `You're in, congratulations! ✅\n\nNext step: book your call here: https://calendly.com/marketingwithamanda/the-profit-accelerator-call\n\nThen complete the intake form here: [INTAKE LINK] (at least 24h before your call).`,
-          nextStage: STAGES.PAID
+          message: `You're in, congratulations! ✅\n\nNext step: book your call here: ${SCRIPTS.BOOKING_LINK}\n\nThen complete the intake form here: ${SCRIPTS.INTAKE_LINK} (at least 24h before your call).`,
+          nextStage: STAGES.WAITING_BOOKING
         };
       }
       break;
+
   }
 
   // If no specific match, return null (will use AI response)
@@ -268,18 +264,127 @@ function getUsersNeedingFollowUp() {
   for (const flow of userFlows.values()) {
     const lastUpdate = new Date(flow.updatedAt);
     const hoursSinceUpdate = (now - lastUpdate) / (1000 * 60 * 60);
+    const followUpCount = flow.followUpCount || 0;
 
-    // Check if they need a follow-up based on stage and time
-    if (flow.stage === STAGES.WAITING_INITIAL_REPLY && hoursSinceUpdate >= 48) {
-      needsFollowUp.push({ ...flow, followUpType: 'initial_1' });
-    } else if (flow.stage === STAGES.WAITING_DOC_REPLY && hoursSinceUpdate >= 24) {
-      needsFollowUp.push({ ...flow, followUpType: 'doc_1' });
-    } else if (flow.stage === STAGES.WAITING_PAYMENT && hoursSinceUpdate >= 24) {
-      needsFollowUp.push({ ...flow, followUpType: 'link_1' });
+    let followUp = null;
+
+    // 1. Initial DM Follow-ups
+    if (flow.stage === STAGES.WAITING_INITIAL_REPLY) {
+      if (followUpCount === 0 && hoursSinceUpdate >= 48) {
+        followUp = {
+          message: `Hey ${flow.firstName}, I put together a quick doc that shows the new way coaches are getting consistent clients from Facebook.\nWant me to send it?`,
+          nextStage: STAGES.WAITING_INITIAL_REPLY,
+          followUpCount: 1
+        };
+      } else if (followUpCount === 1 && hoursSinceUpdate >= 48) { // 48h after first follow-up (96h total)
+        followUp = {
+          message: `Hey ${flow.firstName}, you probably got busy, just bumping this so you don't miss it.\nWant me to send the doc?`,
+          nextStage: STAGES.WAITING_INITIAL_REPLY,
+          followUpCount: 2
+        };
+      } else if (followUpCount === 2 && hoursSinceUpdate >= 48) { // 144h total
+        followUp = {
+          message: `Hey ${flow.firstName}, quick heads up, we closed the Gameplan spots for now 😊\nCan you let me know whether it was timing, budget, or just not a fit?`,
+          nextStage: STAGES.CLOSED,
+          followUpCount: 3
+        };
+      }
+    }
+
+    // 2. Doc Follow-ups
+    else if (flow.stage === STAGES.WAITING_DOC_REPLY) {
+      if (followUpCount === 0 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Hey ${flow.firstName}, I am curious, what did you think of the Gameplan?`,
+          nextStage: STAGES.WAITING_DOC_REPLY,
+          followUpCount: 1
+        };
+      } else if (followUpCount === 1 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Hey ${flow.firstName}, mind me following up on this?`,
+          nextStage: STAGES.WAITING_DOC_REPLY,
+          followUpCount: 2
+        };
+      } else if (followUpCount === 2 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Quick favor? If the doc was off base, can you hit reply and tell me was it timing, or did it just not feel relevant right now?`,
+          nextStage: STAGES.CLOSED,
+          followUpCount: 3
+        };
+      }
+    }
+
+    // 3. Link Follow-ups
+    else if (flow.stage === STAGES.WAITING_PAYMENT) {
+      if (followUpCount === 0 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `${flow.firstName}, have you been able to secure your spot?`,
+          nextStage: STAGES.WAITING_PAYMENT,
+          followUpCount: 1
+        };
+      } else if (followUpCount === 1 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Quick one, ${flow.firstName}, do you want me to hold a Gameplan spot for you this month?`,
+          nextStage: STAGES.WAITING_PAYMENT,
+          followUpCount: 2
+        };
+      } else if (followUpCount === 2 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Hey ${flow.firstName}, do you need a little more time? I'll have to pull this link down soon.\nShould I keep it open, or close it out?`,
+          nextStage: STAGES.CLOSED,
+          followUpCount: 3
+        };
+      }
+    }
+
+    // 4. Paid Reminders (Booking/Intake)
+    else if (flow.stage === STAGES.WAITING_BOOKING) {
+      if (followUpCount === 0 && hoursSinceUpdate >= 24) {
+        followUp = {
+          message: `Quick reminder, please book your call here: ${SCRIPTS.BOOKING_LINK}`,
+          nextStage: STAGES.WAITING_BOOKING,
+          followUpCount: 1
+        };
+      }
+    }
+
+    if (followUp) {
+      needsFollowUp.push({
+        senderId: flow.senderId,
+        firstName: flow.firstName,
+        ...followUp
+      });
     }
   }
 
   return needsFollowUp;
+}
+
+/**
+ * Execute all pending follow-ups
+ */
+async function executeFollowUps() {
+  const { sendMessageWithSplit } = require('./facebook');
+  const fellows = getUsersNeedingFollowUp();
+
+  console.log(`🤖 Found ${fellows.length} users needing follow-up`);
+
+  for (const follow of fellows) {
+    try {
+      console.log(`📨 Sending follow-up to ${follow.firstName} (${follow.senderId})`);
+      await sendMessageWithSplit(follow.senderId, follow.message);
+
+      // Update the flow
+      const flow = userFlows.get(follow.senderId);
+      flow.followUpCount = follow.followUpCount;
+      await updateStage(follow.senderId, follow.nextStage, `Automated Follow-up #${follow.followUpCount}`, false);
+
+    } catch (error) {
+      console.error(`❌ Failed to send follow-up to ${follow.firstName}:`, error.message);
+    }
+  }
+
+  return fellows.length;
 }
 
 // Initialize on load
@@ -288,6 +393,7 @@ loadFlows();
 module.exports = {
   STAGES,
   ENTRY_TYPES,
+  SCRIPTS,
   initializeUser,
   getUserFlow,
   updateStage,
@@ -295,6 +401,7 @@ module.exports = {
   getInitialDM,
   getAllFlows,
   getUsersNeedingFollowUp,
+  executeFollowUps,
   loadFlows,
   saveFlows
 };
